@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Chat</title>
+    <style>
+        body { font-family: sans-serif; max-width: 700px; margin: 40px auto; padding: 0 16px; }
+        h1 { font-size: 1.4rem; }
+        h2 { font-size: 1.1rem; margin-top: 24px; }
+        input, textarea { width: 100%; box-sizing: border-box; padding: 8px; font-size: 1rem; }
+        textarea { resize: vertical; }
+        textarea#answer { height: 180px; margin-top: 8px; }
+        textarea#urls { height: 120px; margin-top: 8px; }
+        .buttons { margin-top: 8px; }
+        button { padding: 8px 16px; font-size: 1rem; margin-right: 8px; cursor: pointer; }
+        button:disabled { cursor: default; opacity: 0.6; }
+        .hint { color: #666; font-size: 0.85rem; margin-top: 4px; }
+        .result { font-size: 0.85rem; color: #444; margin-top: 8px; white-space: pre-wrap; }
+        .ok { color: #1a7d1a; }
+        .err { color: #b00020; }
+    </style>
+</head>
+<body>
+    <h1>AI Chat</h1>
+
+    <h2>Ingest URLs</h2>
+    <textarea id="urls" placeholder="One URL per line, e.g.&#10;https://example.com/page-a&#10;https://example.com/page-b"></textarea>
+    <div class="hint">Each URL is fetched, stripped of HTML, embedded with nomic-embed-text, and stored in OpenSearch.</div>
+    <div class="buttons">
+        <button id="ingestBtn">Ingest</button>
+    </div>
+    <div id="ingestResult" class="result"></div>
+
+    <h2>Ask a Question</h2>
+    <input id="question" type="text" placeholder="Type your question..." />
+    <div class="buttons">
+        <button id="askBtn">Ask</button>
+        <button id="resetBtn">Reset</button>
+    </div>
+    <textarea id="answer" readonly placeholder="The answer will appear here..."></textarea>
+
+    <script>
+        const questionEl = document.getElementById('question');
+        const answerEl = document.getElementById('answer');
+        const askBtn = document.getElementById('askBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const urlsEl = document.getElementById('urls');
+        const ingestBtn = document.getElementById('ingestBtn');
+        const ingestResultEl = document.getElementById('ingestResult');
+
+        function parseUrls() {
+            return urlsEl.value
+                .split('\n')
+                .map(s => s.trim())
+                .filter(s => s.length > 0);
+        }
+
+        async function ingest() {
+            const urls = parseUrls();
+            if (urls.length === 0) {
+                ingestResultEl.textContent = 'Please enter at least one URL.';
+                ingestResultEl.className = 'result err';
+                return;
+            }
+            ingestBtn.disabled = true;
+            ingestResultEl.textContent = 'Ingesting ' + urls.length + ' URL(s)...';
+            ingestResultEl.className = 'result';
+            try {
+                const res = await fetch('/ingest', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ urls })
+                });
+                if (!res.ok) {
+                    throw new Error('Request failed: ' + res.status);
+                }
+                const data = await res.json();
+                ingestResultEl.textContent =
+                    'Submitted: ' + data.submitted +
+                    ' | Indexed: ' + data.indexed +
+                    ' | Skipped: ' + data.skipped;
+                ingestResultEl.className = 'result ok';
+            } catch (err) {
+                ingestResultEl.textContent = 'Error: ' + err.message;
+                ingestResultEl.className = 'result err';
+            } finally {
+                ingestBtn.disabled = false;
+            }
+        }
+
+        async function ask() {
+            const question = questionEl.value.trim();
+            if (!question) {
+                answerEl.value = 'Please enter a question.';
+                return;
+            }
+            askBtn.disabled = true;
+            answerEl.value = 'Thinking...';
+            try {
+                const res = await fetch('/ask', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ question })
+                });
+                if (!res.ok) {
+                    throw new Error('Request failed: ' + res.status);
+                }
+                const data = await res.json();
+                answerEl.value = data.answer;
+            } catch (err) {
+                answerEl.value = 'Error: ' + err.message;
+            } finally {
+                askBtn.disabled = false;
+            }
+        }
+
+        function reset() {
+            questionEl.value = '';
+            answerEl.value = '';
+            questionEl.focus();
+        }
+
+        ingestBtn.addEventListener('click', ingest);
+        askBtn.addEventListener('click', ask);
+        resetBtn.addEventListener('click', reset);
+        questionEl.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') ask();
+        });
+    </script>
+</body>
+</html>
