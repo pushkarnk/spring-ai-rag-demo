@@ -3,6 +3,7 @@ package demo.chatclient.rag;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.document.Document;
+import org.springframework.ai.transformer.splitter.TokenTextSplitter;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -20,12 +21,15 @@ public class IngestService {
 
     private final VectorStore vectorStore;
     private final int batchSize;
+    private final TokenTextSplitter textSplitter;
     private final RestClient httpClient;
 
     public IngestService(VectorStore vectorStore,
-                         @Value("${app.rag.ingest.batch-size:16}") int batchSize) {
+                         @Value("${app.rag.ingest.batch-size:16}") int batchSize,
+                         @Value("${app.rag.ingest.chunk-size:300}") int chunkSize) {
         this.vectorStore = vectorStore;
         this.batchSize = batchSize;
+        this.textSplitter = TokenTextSplitter.builder().withChunkSize(chunkSize).build();
         this.httpClient = RestClient.builder()
                 .defaultHeader("User-Agent", "chat-client/rag")
                 .build();
@@ -42,7 +46,7 @@ public class IngestService {
                     skipped++;
                     continue;
                 }
-                documents.add(toDocument(url, content));
+                documents.addAll(this.textSplitter.split(toDocument(url, content)));
             } catch (Exception e) {
                 log.warn("Skipping {}: {}", url, e.getMessage());
                 skipped++;
