@@ -19,6 +19,10 @@
         .result { font-size: 0.85rem; color: #444; margin-top: 8px; white-space: pre-wrap; }
         .ok { color: #1a7d1a; }
         .err { color: #b00020; }
+        .metrics { margin-top: 8px; border: 1px solid #ddd; border-radius: 6px; padding: 4px 12px; font-size: 0.9rem; }
+        .metric-row { display: flex; justify-content: space-between; gap: 16px; padding: 4px 0; }
+        .metric-name { color: #666; }
+        .metric-value { font-variant-numeric: tabular-nums; }
     </style>
 </head>
 <body>
@@ -40,6 +44,14 @@
     </div>
     <textarea id="answer" readonly placeholder="The answer will appear here..."></textarea>
 
+    <h2>Metrics</h2>
+    <div class="metrics">
+        <div class="metric-row"><span class="metric-name">Model</span><span class="metric-value" id="mModel">—</span></div>
+        <div class="metric-row"><span class="metric-name">Gen AI operations</span><span class="metric-value" id="mGenAi">—</span></div>
+        <div class="metric-row"><span class="metric-name">Vector DB operations</span><span class="metric-value" id="mVector">—</span></div>
+        <div class="metric-row"><span class="metric-name">Token usage (in / out / total)</span><span class="metric-value" id="mTokens">—</span></div>
+    </div>
+    <div id="metricsStatus" class="hint"></div>
     <script>
         const questionEl = document.getElementById('question');
         const answerEl = document.getElementById('answer');
@@ -127,6 +139,83 @@
         questionEl.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') ask();
         });
+        const mModelEl = document.getElementById('mModel');
+        const mGenAiEl = document.getElementById('mGenAi');
+        const mVectorEl = document.getElementById('mVector');
+        const mTokensEl = document.getElementById('mTokens');
+        const metricsStatusEl = document.getElementById('metricsStatus');
+
+        async function fetchMetric(name, tags) {
+            const qs = (tags || []).map(t => 'tag=' + encodeURIComponent(t)).join('&');
+            const res = await fetch('/actuator/metrics/' + name + (qs ? '?' + qs : ''));
+            if (res.status === 404) return null; // no data yet for this tag combination
+            if (!res.ok) throw new Error('Request failed: ' + res.status);
+            return res.json();
+        }
+
+        function stat(data, statistic) {
+            if (!data) return 0;
+            const m = (data.measurements || []).find(m => m.statistic === statistic);
+            return m ? m.value : 0;
+        }
+
+        function tagValues(data, tagName) {
+            if (!data) return [];
+            const t = (data.availableTags || []).find(t => t.tag === tagName);
+            return t ? t.values : [];
+        }
+
+        function fmtOps(data) {
+            const count = stat(data, 'COUNT');
+            const total = stat(data, 'TOTAL_TIME');
+            return count + ' ops, ' + total.toFixed(3) + ' s total';
+        }
+
+        function fmtTokens(n) {
+            return Math.round(n).toLocaleString();
+        }
+
+        function detectModel(chatTokenMetric, tokenMetric) {
+            // Prefer the model reported on chat responses...
+            let models = tagValues(chatTokenMetric, 'gen_ai.response.model');
+            if (models.length === 0) {
+                // ...otherwise the requested chat model (ignoring the "none" placeholder)...
+                models = tagValues(chatTokenMetric, 'gen_ai.request.model')
+                    .filter(v => v !== 'none');
+            }
+            if (models.length === 0) {
+                // ...and finally fall back to any requested model seen so far.
+                models = tagValues(tokenMetric, 'gen_ai.request.model')
+                    .filter(v => v !== 'none');
+            }
+            return models.length > 0 ? models.join(', ') : '—';
+        }
+
+        async function updateMetrics() {
+            try {
+                const [genAi, vectorDb, tokIn, tokOut, tokTotal, chatTok] = await Promise.all([
+                    fetchMetric('gen_ai.client.operation'),
+                    fetchMetric('db.vector.client.operation'),
+                    fetchMetric('gen_ai.client.token.usage', ['gen_ai.token.type:input']),
+                    fetchMetric('gen_ai.client.token.usage', ['gen_ai.token.type:output']),
+                    fetchMetric('gen_ai.client.token.usage', ['gen_ai.token.type:total']),
+                    fetchMetric('gen_ai.client.token.usage', ['gen_ai.operation.name:chat'])
+                ]);
+                mModelEl.textContent = detectModel(chatTok, tokTotal);
+                mGenAiEl.textContent = fmtOps(genAi);
+                mVectorEl.textContent = fmtOps(vectorDb);
+                mTokensEl.textContent =
+                    fmtTokens(stat(tokIn, 'COUNT')) + ' / ' +
+                    fmtTokens(stat(tokOut, 'COUNT')) + ' / ' +
+                    fmtTokens(stat(tokTotal, 'COUNT'));
+                metricsStatusEl.textContent = 'Last updated: ' + new Date().toLocaleTimeString();
+            } catch (err) {
+                metricsStatusEl.textContent = 'Metrics unavailable: ' + err.message;
+            }
+        }
+
+        updateMetrics();
+        setInterval(updateMetrics, 5000);
     </script>
 </body>
 </html>
