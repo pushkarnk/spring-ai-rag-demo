@@ -1,0 +1,52 @@
+name: rag-app
+type: charm
+title: Spring AI RAG demo
+summary: RAG chat app; every backend comes from a Juju relation.
+description: |
+  Spring Boot RAG app. Chat model, embedding model and vector store are all
+  wired via relations; swap one with `juju remove-relation` + `juju integrate`.
+  Exactly one of opensearch / postgresql must be related.
+  For postgresql: `juju config postgresql plugin_vector_enable=true`.
+
+base: ubuntu@24.04
+platforms:
+  amd64:
+
+parts:
+  charm:
+    plugin: charm
+    source: .
+
+containers:
+  app:
+    resource: app-image
+
+resources:
+  app-image:
+    type: oci-image
+    description: Rock with Java 21 and the boot jar at /app/app.jar
+
+requires:
+  inference:
+    interface: openai_api   # app databag: url (OpenAI-compatible base, incl. /v1), model
+    limit: 1
+  embedding:
+    interface: ollama_api   # app databag: url, model
+    limit: 1
+  opensearch:
+    interface: opensearch_client
+    limit: 1
+  postgresql:
+    interface: postgresql_client
+    limit: 1
+
+config:
+  options:
+    top-k:
+      type: int
+      default: 5
+      description: Documents retrieved per question.
+    chunk-size:
+      type: int
+      default: 300
+      description: Token chunk size used when ingesting.
