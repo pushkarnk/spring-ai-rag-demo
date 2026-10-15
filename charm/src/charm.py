@@ -8,6 +8,12 @@ from charms.traefik_k8s.v2.ingress import IngressPerAppRequirer
 
 CA_PATH = "/app/opensearch-ca.pem"
 NO_JDBC = "org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration"
+STORE_KEYS = (
+    "SPRING_AUTOCONFIGURE_EXCLUDE", "SPRING_PROFILES_ACTIVE",
+    "POSTGRES_URL", "POSTGRES_USERNAME", "POSTGRES_PASSWORD",
+    "OPENSEARCH_URI", "OPENSEARCH_USERNAME", "OPENSEARCH_PASSWORD", "OPENSEARCH_INDEX", "OPENSEARCH_CA_CERT",
+)
+
 
 
 class RagAppCharm(ops.CharmBase):
@@ -44,7 +50,7 @@ class RagAppCharm(ops.CharmBase):
         if not (pg or os_):
             return self._status(ops.BlockedStatus("integrate postgresql or opensearch"))
 
-        env = {
+        env = dict.fromkeys(STORE_KEYS, "") | {
             "INFERENCE_URL": inf["url"],
             "INFERENCE_MODEL": inf.get("model", ""),
             "OLLAMA_URL": emb["url"],
