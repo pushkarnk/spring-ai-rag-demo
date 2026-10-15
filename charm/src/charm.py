@@ -3,6 +3,8 @@
 
 import ops
 from charms.data_platform_libs.v0.data_interfaces import DatabaseRequires, OpenSearchRequires
+from charms.traefik_k8s.v2.ingress import IngressPerAppRequirer
+
 
 CA_PATH = "/app/opensearch-ca.pem"
 NO_JDBC = "org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration"
@@ -23,6 +25,7 @@ class RagAppCharm(ops.CharmBase):
             self.on.embedding_relation_changed, self.on.embedding_relation_broken,
         ):
             framework.observe(e, self._reconcile)
+        self.ingress = IngressPerAppRequirer(self, port=8080, strip_prefix=True)
 
     def _reconcile(self, event):
         c = self.unit.get_container("app")
@@ -48,6 +51,7 @@ class RagAppCharm(ops.CharmBase):
             "OLLAMA_MODEL": emb.get("model", "nomic-embed-text"),
             "RAG_TOP_K": str(self.config["top-k"]),
             "RAG_CHUNK_SIZE": str(self.config["chunk-size"]),
+            "JAVA_TOOL_OPTIONS": "-Djava.net.preferIPv4Stack=true",
         }
         if pg:
             d = self.pg.fetch_relation_data().get(pg.id, {})
@@ -75,15 +79,17 @@ class RagAppCharm(ops.CharmBase):
                 c.push(CA_PATH, d["tls-ca"], make_dirs=True)
                 env |= {"SPRING_PROFILES_ACTIVE": "tls", "OPENSEARCH_CA_CERT": CA_PATH}
 
-        c.add_layer("rag-app", {
-            "services": {"rag-app": {
-                "override": "replace",
-                "startup": "enabled",
-                "command": "java -jar /app/app.jar",
-                "environment": env,
-            }},
-        }, combine=True)
-        c.replan()  # Pebble restarts the service only if the layer changed
+        layer = {
+            "summary": "rag-app env",
+            "services": {
+                "spring-boot": {
+                    "override": "merge",
+                    "environment": env,
+                },
+            },
+        }
+        c.add_layer("rag-app", layer, combine=True)
+        c.replan()
         self.unit.set_ports(8080)
         self._status(ops.ActiveStatus(f"{env['VECTORSTORE_TYPE']} + {env['INFERENCE_MODEL']}"))
 

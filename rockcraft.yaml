@@ -32,9 +32,10 @@ platforms:
 extensions:
     - spring-boot-framework
 
-# uncomment the sections you need and adjust according to your requirements.
-# On Ubuntu 26.04, replace "/" with "." in the generated extension part names.
-# parts:
+parts:
+  spring-boot-framework/runtime:
+    jlink-extra-modules:
+      - jdk.crypto.ec
 
 #   spring-boot-framework/gradle-init-script
 #   override-build: |

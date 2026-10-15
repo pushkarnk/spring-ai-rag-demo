@@ -28,17 +28,22 @@ resources:
 
 requires:
   inference:
-    interface: openai_api   # app databag: url (OpenAI-compatible base, incl. /v1), model
+    interface: inference_openai
     limit: 1
   embedding:
-    interface: ollama_api   # app databag: url, model
+    interface: ollama_api
     limit: 1
   opensearch:
     interface: opensearch_client
     limit: 1
   postgresql:
     interface: postgresql_client
+    optional: true
     limit: 1
+  ingress:
+    interface: ingress
+    limit: 1
+    optional: true
 
 config:
   options:
@@ -50,3 +55,6 @@ config:
       type: int
       default: 300
       description: Token chunk size used when ingesting.
+    app-profiles:
+      type: string
+      description: Comma separated Spring profiles to activate.

@@ -8,6 +8,8 @@ import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
+import org.springframework.http.client.JdkClientHttpRequestFactory;
+
 
 import java.net.URI;
 import java.util.ArrayList;
@@ -31,6 +33,7 @@ public class IngestService {
         this.batchSize = batchSize;
         this.textSplitter = TokenTextSplitter.builder().withChunkSize(chunkSize).build();
         this.httpClient = RestClient.builder()
+		.requestFactory(new JdkClientHttpRequestFactory())
                 .defaultHeader("User-Agent", "chat-client/rag")
                 .build();
     }
