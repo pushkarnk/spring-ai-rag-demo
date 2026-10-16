@@ -21,7 +21,7 @@ class RagAppCharm(ops.CharmBase):
         super().__init__(framework)
         self.pg = DatabaseRequires(self, "postgresql", database_name="rag")
         # ponytail: admin so initialize-schema can create the index; narrow if the default role suffices.
-        self.os = OpenSearchRequires(self, "opensearch", index="url-docs", extra_user_roles="admin")
+        self.os = OpenSearchRequires(self, "opensearch", index="rag-app", extra_user_roles="admin")
         for e in (
             self.on.app_pebble_ready, self.on.config_changed, self.on.upgrade_charm,
             self.pg.on.database_created, self.pg.on.endpoints_changed,
@@ -79,7 +79,7 @@ class RagAppCharm(ops.CharmBase):
                 "OPENSEARCH_URI": ",".join(f"https://{e}" for e in d["endpoints"].split(",")),
                 "OPENSEARCH_USERNAME": d["username"],
                 "OPENSEARCH_PASSWORD": d["password"],
-                "OPENSEARCH_INDEX": d.get("index", "url-docs"),
+                "OPENSEARCH_INDEX": "url-docs",
             }
             if d.get("tls-ca"):
                 c.push(CA_PATH, d["tls-ca"], make_dirs=True)
