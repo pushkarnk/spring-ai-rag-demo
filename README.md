@@ -126,7 +126,6 @@ proxied-endpoints: '{"traefik-k8s": {"url": "http://10.97.0.25"}, "rag-app": {"u
   "http://10.97.0.25/rag-demo-rag-app"}}'
 ```
 Access the rag-app URL (`http://10.97.0.25/rag-demo-rag-app` here) in the browser and run a RAG query.
-<img width="1033" height="990" alt="run-rag-query" src="https://github.com/user-attachments/assets/66049c82-4692-4272-9829-901ee4add348" />
 
 ### 16. Try changing the model to qwen3
 ```
